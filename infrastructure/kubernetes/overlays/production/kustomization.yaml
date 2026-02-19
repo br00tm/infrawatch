@@ -21,15 +21,16 @@ images:
   - name: infrawatch/workers
     newTag: latest
 
-configMapGenerator:
-  - name: backend-config
-    behavior: merge
-    literals:
-      - APP_ENV=production
-      - DEBUG=false
-
-# Production resource patches
+# Production patches (ConfigMap + resource limits)
 patches:
+  - patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: backend-config
+      data:
+        APP_ENV: "production"
+        DEBUG: "false"
   - patch: |-
       apiVersion: apps/v1
       kind: Deployment

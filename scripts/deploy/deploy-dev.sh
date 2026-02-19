@@ -91,7 +91,15 @@ ok "Secrets created"
 # ─────────────────────────────────────────────
 # Apply manifests
 # ─────────────────────────────────────────────
-log "Applying Kubernetes manifests (development overlay)..."
+# Apply base first (Namespaces, NetworkPolicies, etc.) WITHOUT the namespace transformer
+# to avoid kustomize renaming Namespace resources themselves.
+log "Applying base manifests (namespaces, policies)..."
+kubectl apply -f infrastructure/kubernetes/base/namespace.yaml
+for f in resource-quotas.yaml priority-classes.yaml network-policies.yaml; do
+  [[ -f "infrastructure/kubernetes/base/${f}" ]] && kubectl apply -f "infrastructure/kubernetes/base/${f}"
+done
+
+log "Applying Kubernetes app manifests (development overlay)..."
 kubectl apply -k infrastructure/kubernetes/overlays/development/
 ok "Manifests applied"
 
