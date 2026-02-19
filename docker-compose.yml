@@ -1,0 +1,174 @@
+version: '3.8'
+
+services:
+  # ===================
+  # Backend API
+  # ===================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: infrawatch-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=development
+      - DEBUG=true
+      - MONGODB_URL=mongodb://infrawatch:infrawatch123@mongodb:27017/infrawatch?authSource=admin
+      - MONGODB_DB_NAME=infrawatch
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://infrawatch:infrawatch123@rabbitmq:5672/
+      - JWT_SECRET_KEY=dev-secret-key-change-in-production
+      - CORS_ORIGINS=["http://localhost:3000","http://localhost:5173"]
+    depends_on:
+      - mongodb
+      - redis
+      - rabbitmq
+    networks:
+      - infrawatch-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ===================
+  # Frontend
+  # ===================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: infrawatch-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - infrawatch-network
+
+  # ===================
+  # Celery Worker
+  # ===================
+  worker:
+    build:
+      context: ./workers
+      dockerfile: Dockerfile
+    container_name: infrawatch-worker
+    restart: unless-stopped
+    command: celery -A celery_app worker --loglevel=info --concurrency=4
+    environment:
+      - MONGODB_URL=mongodb://infrawatch:infrawatch123@mongodb:27017/infrawatch?authSource=admin
+      - MONGODB_DB_NAME=infrawatch
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    depends_on:
+      - mongodb
+      - redis
+      - rabbitmq
+    networks:
+      - infrawatch-network
+
+  # ===================
+  # Celery Beat (Scheduler)
+  # ===================
+  beat:
+    build:
+      context: ./workers
+      dockerfile: Dockerfile
+    container_name: infrawatch-beat
+    restart: unless-stopped
+    command: celery -A celery_app beat --loglevel=info
+    environment:
+      - MONGODB_URL=mongodb://infrawatch:infrawatch123@mongodb:27017/infrawatch?authSource=admin
+      - MONGODB_DB_NAME=infrawatch
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    depends_on:
+      - mongodb
+      - redis
+      - worker
+    networks:
+      - infrawatch-network
+
+  # ===================
+  # MongoDB
+  # ===================
+  mongodb:
+    image: mongo:7.0
+    container_name: infrawatch-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=infrawatch
+      - MONGO_INITDB_ROOT_PASSWORD=infrawatch123
+      - MONGO_INITDB_DATABASE=infrawatch
+    volumes:
+      - mongodb_data:/data/db
+      - ./scripts/setup/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    networks:
+      - infrawatch-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ===================
+  # Redis
+  # ===================
+  redis:
+    image: redis:7-alpine
+    container_name: infrawatch-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - infrawatch-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ===================
+  # RabbitMQ
+  # ===================
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: infrawatch-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=infrawatch
+      - RABBITMQ_DEFAULT_PASS=infrawatch123
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - infrawatch-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  infrawatch-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  redis_data:
+  rabbitmq_data:
