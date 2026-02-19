@@ -1,0 +1,97 @@
+{{- if .Values.worker.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "infrawatch.fullname" . }}-worker
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "infrawatch.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  {{- if not .Values.worker.autoscaling.enabled }}
+  replicas: {{ .Values.worker.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "infrawatch.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/backend-secret.yaml") . | sha256sum }}
+      labels:
+        {{- include "infrawatch.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      terminationGracePeriodSeconds: 60   # Allow in-flight tasks to finish
+      containers:
+        - name: worker
+          image: {{ include "infrawatch.image" (dict "image" .Values.worker.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.worker.image.pullPolicy }}
+          command:
+            - celery
+            - -A
+            - celery_app
+            - worker
+            - --loglevel=info
+            - --concurrency=4
+            - -Q
+            - default,metrics,alerts
+          envFrom:
+            - configMapRef:
+                name: {{ include "infrawatch.fullname" . }}-backend-config
+            - secretRef:
+                name: {{ include "infrawatch.fullname" . }}-backend-secrets
+          env:
+            - name: CELERY_BROKER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "infrawatch.fullname" . }}-backend-secrets
+                  key: REDIS_URL
+            - name: CELERY_RESULT_BACKEND
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "infrawatch.fullname" . }}-backend-secrets
+                  key: REDIS_URL
+          livenessProbe:
+            exec:
+              command:
+                - celery
+                - -A
+                - celery_app
+                - inspect
+                - ping
+                - -t
+                - "5"
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+{{- end }}

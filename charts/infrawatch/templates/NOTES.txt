@@ -1,0 +1,45 @@
+🎉 InfraWatch has been deployed!
+
+Release:   {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+Version:   {{ .Chart.AppVersion }}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ACCESS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{{- if .Values.frontend.ingress.enabled }}
+{{- range .Values.frontend.ingress.hosts }}
+  Application: https://{{ .host }}
+{{- end }}
+{{- else }}
+  Port-forward the frontend:
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "infrawatch.fullname" . }}-frontend 3000:80
+  Then open: http://localhost:3000
+{{- end }}
+
+  Backend API:
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "infrawatch.fullname" . }}-backend 8000:8000
+  Docs: http://localhost:8000/api/v1/docs
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  COMPONENT STATUS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  LOGS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/component=backend --tail=50
+  kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/component=worker --tail=50
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  UPGRADING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  helm upgrade {{ .Release.Name }} charts/infrawatch/ \
+    --namespace {{ .Release.Namespace }} \
+    --values charts/infrawatch/values.yaml \
+    --values charts/infrawatch/values-prod.yaml \
+    --set "backend.image.tag=<new-version>" \
+    --set "frontend.image.tag=<new-version>" \
+    --set "worker.image.tag=<new-version>" \
+    --atomic --cleanup-on-fail

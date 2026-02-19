@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: infrawatch-apps
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: infrawatch
+  source:
+    repoURL: https://github.com/br00tm/infrawatch  # Replace
+    targetRevision: main
+    path: infrastructure/kubernetes/argocd/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: false       # Don't auto-prune — require manual approval for deletes
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

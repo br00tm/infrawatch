@@ -1,0 +1,79 @@
+{{- if .Values.beat.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "infrawatch.fullname" . }}-beat
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "infrawatch.labels" . | nindent 4 }}
+    app.kubernetes.io/component: beat
+spec:
+  # CRITICAL: Always 1 — multiple Beat instances cause duplicate task scheduling
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "infrawatch.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: beat
+  # Recreate ensures the old pod is fully terminated before the new one starts
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/backend-secret.yaml") . | sha256sum }}
+      labels:
+        {{- include "infrawatch.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: beat
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: beat
+          image: {{ include "infrawatch.image" (dict "image" .Values.beat.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.beat.image.pullPolicy }}
+          command:
+            - celery
+            - -A
+            - celery_app
+            - beat
+            - --loglevel=info
+            - --scheduler
+            - redbeat.RedBeatScheduler
+          envFrom:
+            - configMapRef:
+                name: {{ include "infrawatch.fullname" . }}-backend-config
+            - secretRef:
+                name: {{ include "infrawatch.fullname" . }}-backend-secrets
+          env:
+            - name: CELERY_BROKER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "infrawatch.fullname" . }}-backend-secrets
+                  key: REDIS_URL
+            - name: CELERY_RESULT_BACKEND
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "infrawatch.fullname" . }}-backend-secrets
+                  key: REDIS_URL
+          resources:
+            {{- toYaml .Values.beat.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+{{- end }}

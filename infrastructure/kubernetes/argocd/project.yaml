@@ -1,0 +1,56 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: infrawatch
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: InfraWatch Monitoring System
+
+  sourceRepos:
+    - "https://github.com/br00tm/infrawatch"   # Replace with your repo
+    - "https://prometheus-community.github.io/helm-charts"
+    - "https://grafana.github.io/helm-charts"
+    - "https://mongodb.github.io/helm-charts"
+    - "https://charts.bitnami.com/bitnami"
+
+  destinations:
+    - namespace: infrawatch
+      server: https://kubernetes.default.svc
+    - namespace: infrawatch-data
+      server: https://kubernetes.default.svc
+    - namespace: infrawatch-monitoring
+      server: https://kubernetes.default.svc
+    - namespace: argocd
+      server: https://kubernetes.default.svc
+
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+    - group: "scheduling.k8s.io"
+      kind: PriorityClass
+    - group: "networking.k8s.io"
+      kind: NetworkPolicy
+    - group: "rbac.authorization.k8s.io"
+      kind: ClusterRole
+    - group: "rbac.authorization.k8s.io"
+      kind: ClusterRoleBinding
+
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+
+  roles:
+    - name: read-only
+      description: Read-only access
+      policies:
+        - p, proj:infrawatch:read-only, applications, get, infrawatch/*, allow
+      groups:
+        - infrawatch-viewers
+    - name: admin
+      description: Full admin access
+      policies:
+        - p, proj:infrawatch:admin, applications, *, infrawatch/*, allow
+      groups:
+        - infrawatch-admins

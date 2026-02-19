@@ -1,0 +1,16 @@
+{{- if .Values.backend.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "infrawatch.fullname" . }}-backend-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "infrawatch.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+data:
+  APP_ENV: {{ .Values.backend.env.APP_ENV | default "production" | quote }}
+  DEBUG: {{ .Values.backend.env.DEBUG | default "false" | quote }}
+  LOG_LEVEL: {{ .Values.backend.env.LOG_LEVEL | default "INFO" | quote }}
+  MONGODB_DB_NAME: {{ .Values.mongodb.auth.database | default "infrawatch" | quote }}
+  CORS_ORIGINS: {{ .Values.backend.env.CORS_ORIGINS | default "[]" | quote }}
+{{- end }}

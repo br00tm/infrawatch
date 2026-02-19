@@ -1,0 +1,23 @@
+{{- if and .Values.backend.enabled .Values.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "infrawatch.fullname" . }}-backend
+  namespace: {{ .Values.serviceMonitor.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "infrawatch.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  selector:
+    matchLabels:
+      {{- include "infrawatch.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.serviceMonitor.interval | default "15s" }}
+      scrapeTimeout: 10s
+{{- end }}

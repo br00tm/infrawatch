@@ -1,0 +1,112 @@
+---
+# InfraWatch Backend
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: infrawatch-backend
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: infrawatch
+spec:
+  project: infrawatch
+  source:
+    repoURL: https://github.com/br00tm/infrawatch
+    targetRevision: main
+    path: infrastructure/kubernetes/overlays/production/backend
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: infrawatch
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 2m
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas   # Managed by HPA
+---
+# InfraWatch Frontend
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: infrawatch-frontend
+  namespace: argocd
+spec:
+  project: infrawatch
+  source:
+    repoURL: https://github.com/br00tm/infrawatch
+    targetRevision: main
+    path: infrastructure/kubernetes/overlays/production/frontend
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: infrawatch
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+# InfraWatch Workers
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: infrawatch-workers
+  namespace: argocd
+spec:
+  project: infrawatch
+  source:
+    repoURL: https://github.com/br00tm/infrawatch
+    targetRevision: main
+    path: infrastructure/kubernetes/apps/workers
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: infrawatch
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+# Monitoring stack (kube-prometheus-stack)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+spec:
+  project: infrawatch
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: "58.x"
+    helm:
+      valueFiles:
+        - $values/infrastructure/kubernetes/infrastructure/monitoring/prometheus/prometheus-values.yaml
+      valuesObject:
+        grafana:
+          adminPassword: "$SECRET_GRAFANA_PASSWORD"
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: "58.x"
+    - repoURL: https://github.com/br00tm/infrawatch
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: infrawatch-monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

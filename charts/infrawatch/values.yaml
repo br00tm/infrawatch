@@ -1,0 +1,181 @@
+# InfraWatch Helm chart default values
+
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: "standard"
+
+# ── Backend ──────────────────────────────────────────────────────────────────
+backend:
+  enabled: true
+  image:
+    repository: infrawatch/backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 2
+  service:
+    type: ClusterIP
+    port: 8000
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+  env:
+    APP_ENV: production
+    DEBUG: "false"
+    LOG_LEVEL: INFO
+  secrets:
+    jwtSecretKey: ""       # Required — set in values-prod.yaml or --set
+    mongodbUrl: ""
+    redisUrl: ""
+    rabbitmqUrl: ""
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8000"
+
+# ── Frontend ─────────────────────────────────────────────────────────────────
+frontend:
+  enabled: true
+  image:
+    repository: infrawatch/frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 2
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    hosts:
+      - host: infrawatch.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: infrawatch-tls
+        hosts:
+          - infrawatch.example.com
+
+# ── Workers ──────────────────────────────────────────────────────────────────
+worker:
+  enabled: true
+  image:
+    repository: infrawatch/workers
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+
+beat:
+  enabled: true
+  image:
+    repository: infrawatch/workers
+    tag: latest
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# ── MongoDB (Bitnami) ─────────────────────────────────────────────────────────
+mongodb:
+  enabled: true
+  architecture: replicaset
+  replicaCount: 3
+  auth:
+    rootPassword: ""     # Required
+    username: infrawatch
+    password: ""         # Required
+    database: infrawatch
+  persistence:
+    size: 20Gi
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 4Gi
+
+# ── Redis (Bitnami) ───────────────────────────────────────────────────────────
+redis:
+  enabled: true
+  architecture: replication
+  auth:
+    enabled: false
+  replica:
+    replicaCount: 2
+  master:
+    persistence:
+      size: 5Gi
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+
+# ── RabbitMQ (Bitnami) ────────────────────────────────────────────────────────
+rabbitmq:
+  enabled: true
+  replicaCount: 3
+  auth:
+    username: infrawatch
+    password: ""         # Required
+  persistence:
+    size: 10Gi
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+
+# ── Service Account ──────────────────────────────────────────────────────────
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# ── Node Selector / Tolerations ───────────────────────────────────────────────
+nodeSelector: {}
+tolerations: []
+
+# ── Monitoring ───────────────────────────────────────────────────────────────
+serviceMonitor:
+  enabled: true
+  namespace: infrawatch-monitoring
+  interval: 15s

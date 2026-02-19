@@ -1,0 +1,71 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [develop]
+
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.infrawatch.example.com
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: tag
+        run: echo "TAG=sha-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: "v1.29.0"
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.KUBECONFIG_STAGING }}" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
+      - name: Update image tags in manifests
+        run: |
+          cd infrastructure/kubernetes/overlays/development
+          # Update image tags using kustomize
+          kustomize edit set image \
+            infrawatch/backend=ghcr.io/${{ github.repository }}/backend:${{ steps.tag.outputs.TAG }} \
+            infrawatch/frontend=ghcr.io/${{ github.repository }}/frontend:${{ steps.tag.outputs.TAG }} \
+            infrawatch/workers=ghcr.io/${{ github.repository }}/workers:${{ steps.tag.outputs.TAG }}
+
+      - name: Deploy to staging
+        run: kubectl apply -k infrastructure/kubernetes/overlays/development/
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/backend -n infrawatch --timeout=300s
+          kubectl rollout status deployment/frontend -n infrawatch --timeout=300s
+          kubectl rollout status deployment/worker -n infrawatch --timeout=300s
+
+      - name: Smoke test
+        run: |
+          BACKEND_URL="https://api-staging.infrawatch.example.com"
+          response=$(curl -sf "${BACKEND_URL}/health" || echo "FAIL")
+          if [[ "$response" == "FAIL" ]]; then
+            echo "Smoke test failed!"
+            kubectl rollout undo deployment/backend -n infrawatch
+            kubectl rollout undo deployment/frontend -n infrawatch
+            exit 1
+          fi
+          echo "Smoke test passed: $response"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Staging deployment failed for commit ${{ github.sha }}"
+          # Add Slack/Discord notification here

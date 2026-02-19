@@ -1,0 +1,52 @@
+# Production overrides — DO NOT commit secrets to git
+# Use external secrets manager (Vault, Sealed Secrets, etc.)
+
+backend:
+  replicaCount: 3
+  autoscaling:
+    minReplicas: 3
+    maxReplicas: 12
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+
+frontend:
+  replicaCount: 3
+  ingress:
+    hosts:
+      - host: infrawatch.yourcompany.com   # Replace
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: infrawatch-tls-prod
+        hosts:
+          - infrawatch.yourcompany.com
+
+worker:
+  replicaCount: 4
+  autoscaling:
+    minReplicas: 4
+    maxReplicas: 10
+
+mongodb:
+  replicaCount: 3
+  persistence:
+    size: 100Gi
+    storageClass: "fast-ssd"
+
+redis:
+  replica:
+    replicaCount: 2
+  master:
+    persistence:
+      size: 20Gi
+
+rabbitmq:
+  replicaCount: 3
+  persistence:
+    size: 50Gi
