@@ -1,0 +1,23 @@
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: infrawatch-critical
+value: 1000000
+globalDefault: false
+description: "Critical InfraWatch components (data layer)"
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: infrawatch-high
+value: 100000
+globalDefault: false
+description: "High priority InfraWatch components (backend API)"
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: infrawatch-normal
+value: 10000
+globalDefault: false
+description: "Normal priority InfraWatch components (frontend, workers)"

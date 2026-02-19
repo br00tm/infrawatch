@@ -29,7 +29,7 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
         IndexModel(
             [("timestamp", ASCENDING)],
             expireAfterSeconds=604800,  # 7 days TTL
-            name="metrics_ttl",
+            name="timestamp_1",
         ),
     ]
     await db.metrics.create_indexes(metrics_indexes)
@@ -42,12 +42,12 @@ async def create_indexes(db: AsyncIOMotorDatabase) -> None:
         IndexModel([("namespace", ASCENDING), ("timestamp", DESCENDING)]),
         IndexModel(
             [("message", "text"), ("source", "text")],
-            name="logs_text_search",
+            name="message_text_source_text",
         ),
         IndexModel(
             [("timestamp", ASCENDING)],
             expireAfterSeconds=2592000,  # 30 days TTL
-            name="logs_ttl",
+            name="timestamp_1",
         ),
     ]
     await db.logs.create_indexes(logs_indexes)

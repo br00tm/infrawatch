@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from app.api.websocket import manager as ws_manager
 from app.core.exceptions import NotFoundError, ValidationError
 from app.dependencies import get_db
 from app.models.alert import AlertStatus
@@ -54,7 +55,9 @@ async def create_alert(
 ):
     """Create a new alert."""
     alert = await service.create_alert(data)
-    return AlertResponse.model_validate(alert.model_dump(by_alias=True))
+    response = AlertResponse.model_validate(alert.model_dump(by_alias=True))
+    await ws_manager.broadcast("alert", response.model_dump(mode="json"))
+    return response
 
 
 @router.get("", response_model=PaginatedResponse[AlertResponse])

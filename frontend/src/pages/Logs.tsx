@@ -1,36 +1,58 @@
-import { useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Card from '../components/common/Card'
 import Input from '../components/common/Input'
+import Button from '../components/common/Button'
+import { logsService } from '../services/logs'
+import { Log, LogLevel } from '../types'
 import { LOG_LEVEL_COLORS } from '../utils/constants'
-import { LogLevel } from '../types'
 
-const mockLogs = [
-  { id: '1', level: 'info', message: 'Pod nginx-deployment-abc123 started successfully', source: 'kubelet', timestamp: '2024-02-12T10:30:00Z' },
-  { id: '2', level: 'warning', message: 'High memory usage detected on node-1 (85%)', source: 'node-monitor', timestamp: '2024-02-12T10:29:45Z' },
-  { id: '3', level: 'error', message: 'Failed to pull image: nginx:latest - timeout', source: 'containerd', timestamp: '2024-02-12T10:29:30Z' },
-  { id: '4', level: 'debug', message: 'Health check passed for service api-gateway', source: 'health-checker', timestamp: '2024-02-12T10:29:15Z' },
-  { id: '5', level: 'critical', message: 'Database connection lost - attempting reconnect', source: 'app-backend', timestamp: '2024-02-12T10:29:00Z' },
-  { id: '6', level: 'info', message: 'Scaling deployment frontend from 2 to 4 replicas', source: 'hpa-controller', timestamp: '2024-02-12T10:28:45Z' },
-  { id: '7', level: 'info', message: 'Certificate renewed for domain api.example.com', source: 'cert-manager', timestamp: '2024-02-12T10:28:30Z' },
-  { id: '8', level: 'warning', message: 'Rate limit reached for API endpoint /users', source: 'api-gateway', timestamp: '2024-02-12T10:28:15Z' },
-]
+const PAGE_SIZE = 50
 
 export default function Logs() {
+  const [logs, setLogs] = useState<Log[]>([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [selectedLevel, setSelectedLevel] = useState<LogLevel | 'all'>('all')
+  const [page, setPage] = useState(1)
 
-  const filteredLogs = mockLogs.filter((log) => {
-    const matchesSearch = log.message.toLowerCase().includes(search.toLowerCase()) ||
-                          log.source.toLowerCase().includes(search.toLowerCase())
-    const matchesLevel = selectedLevel === 'all' || log.level === selectedLevel
-    return matchesSearch && matchesLevel
-  })
+  const fetchLogs = useCallback(async () => {
+    setLoading(true)
+    try {
+      const query = {
+        ...(selectedLevel !== 'all' ? { level: selectedLevel } : {}),
+        ...(search.trim() ? { search: search.trim() } : {}),
+      }
+      const data = await logsService.list(query, page, PAGE_SIZE)
+      setLogs(data.items)
+      setTotal(data.total)
+    } catch (err) {
+      console.error('Failed to load logs', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [selectedLevel, page])
+
+  useEffect(() => {
+    const debounce = setTimeout(() => fetchLogs(), search ? 400 : 0)
+    return () => clearTimeout(debounce)
+  }, [fetchLogs, search])
+
+  function handleLevelChange(level: LogLevel | 'all') {
+    setSelectedLevel(level)
+    setPage(1)
+  }
+
+  function handleSearch(value: string) {
+    setSearch(value)
+    setPage(1)
+  }
 
   const levels: (LogLevel | 'all')[] = ['all', 'debug', 'info', 'warning', 'error', 'critical']
+  const totalPages = Math.ceil(total / PAGE_SIZE)
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Logs</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -45,14 +67,14 @@ export default function Logs() {
             <Input
               placeholder="Search logs..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => handleSearch(e.target.value)}
             />
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {levels.map((level) => (
               <button
                 key={level}
-                onClick={() => setSelectedLevel(level)}
+                onClick={() => handleLevelChange(level)}
                 className={`px-3 py-2 rounded-lg text-sm font-medium capitalize transition-colors ${
                   selectedLevel === level
                     ? 'bg-primary-600 text-white'
@@ -67,38 +89,73 @@ export default function Logs() {
       </Card>
 
       {/* Logs List */}
-      <Card padding="none">
-        <div className="divide-y divide-gray-200 dark:divide-dark-border">
-          {filteredLogs.map((log) => (
-            <div key={log.id} className="p-4 hover:bg-gray-50 dark:hover:bg-dark-border">
-              <div className="flex items-start gap-4">
-                <span
-                  className={`mt-1 px-2 py-0.5 text-xs font-medium rounded uppercase ${
-                    LOG_LEVEL_COLORS[log.level as LogLevel]
-                  }`}
-                >
-                  {log.level}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-900 dark:text-white font-mono break-all">
-                    {log.message}
-                  </p>
-                  <div className="mt-1 flex items-center gap-4 text-xs text-gray-500">
-                    <span>Source: {log.source}</span>
-                    <span>{new Date(log.timestamp).toLocaleString()}</span>
+      {loading ? (
+        <div className="py-16 text-center text-gray-400">Loading logs...</div>
+      ) : logs.length === 0 ? (
+        <Card>
+          <div className="py-12 text-center text-gray-400">
+            <p className="text-lg font-medium">No logs found</p>
+            <p className="text-sm mt-1">
+              Send logs to the API at <code className="font-mono">POST /api/v1/logs</code>
+            </p>
+          </div>
+        </Card>
+      ) : (
+        <Card padding="none">
+          <div className="divide-y divide-gray-200 dark:divide-dark-border">
+            {logs.map((log) => (
+              <div key={log._id} className="p-4 hover:bg-gray-50 dark:hover:bg-dark-border">
+                <div className="flex items-start gap-4">
+                  <span
+                    className={`mt-0.5 px-2 py-0.5 text-xs font-medium rounded uppercase whitespace-nowrap ${
+                      LOG_LEVEL_COLORS[log.level as LogLevel]
+                    }`}
+                  >
+                    {log.level}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-900 dark:text-white font-mono break-all">
+                      {log.message}
+                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-4 text-xs text-gray-500">
+                      <span>Source: {log.source}</span>
+                      {log.namespace && <span>NS: {log.namespace}</span>}
+                      {log.pod_name && <span>Pod: {log.pod_name}</span>}
+                      <span>{new Date(log.timestamp).toLocaleString()}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      </Card>
+            ))}
+          </div>
+        </Card>
+      )}
 
-      {/* Pagination placeholder */}
-      <div className="flex justify-center">
-        <div className="text-sm text-gray-500">
-          Showing {filteredLogs.length} of {mockLogs.length} logs
-        </div>
+      {/* Pagination */}
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-gray-500">
+          {loading ? '...' : `Showing ${logs.length} of ${total} logs`}
+        </span>
+        {totalPages > 1 && (
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1 || loading}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages || loading}
+            >
+              Next
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   )

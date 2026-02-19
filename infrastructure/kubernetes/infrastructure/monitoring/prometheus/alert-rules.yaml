@@ -1,0 +1,192 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: infrawatch-rules
+  namespace: infrawatch-monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    # ── Backend API ──────────────────────────────────────────────────────────
+    - name: infrawatch.backend
+      interval: 30s
+      rules:
+        - alert: BackendDown
+          expr: up{job="infrawatch-backend"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            namespace: infrawatch
+          annotations:
+            summary: "InfraWatch backend is down"
+            description: "Backend has been unreachable for more than 1 minute."
+
+        - alert: BackendHighLatency
+          expr: |
+            histogram_quantile(0.95,
+              rate(http_request_duration_seconds_bucket{job="infrawatch-backend"}[5m])
+            ) > 2
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Backend p95 latency > 2s"
+            description: "95th percentile latency is {{ $value | humanizeDuration }}."
+
+        - alert: BackendHighErrorRate
+          expr: |
+            rate(http_requests_total{job="infrawatch-backend",status=~"5.."}[5m])
+            / rate(http_requests_total{job="infrawatch-backend"}[5m]) > 0.05
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Backend error rate > 5%"
+            description: "{{ $value | humanizePercentage }} of requests are failing."
+
+    # ── Kubernetes Pods ──────────────────────────────────────────────────────
+    - name: infrawatch.pods
+      interval: 30s
+      rules:
+        - alert: PodCrashLooping
+          expr: rate(kube_pod_container_status_restarts_total{namespace=~"infrawatch.*"}[10m]) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod {{ $labels.pod }} is crash looping"
+            description: "Container {{ $labels.container }} has restarted {{ $value | humanize }} times in the last 10 minutes."
+
+        - alert: PodNotReady
+          expr: |
+            kube_pod_status_ready{namespace=~"infrawatch.*", condition="false"} == 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod {{ $labels.pod }} is not ready"
+
+        - alert: DeploymentReplicasMismatch
+          expr: |
+            kube_deployment_spec_replicas{namespace=~"infrawatch.*"}
+            != kube_deployment_status_replicas_available{namespace=~"infrawatch.*"}
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Deployment {{ $labels.deployment }} replicas mismatch"
+            description: "Expected {{ $labels.spec_replicas }}, got {{ $labels.available_replicas }}."
+
+    # ── MongoDB ──────────────────────────────────────────────────────────────
+    - name: infrawatch.mongodb
+      interval: 30s
+      rules:
+        - alert: MongoDBDown
+          expr: mongodb_up == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "MongoDB is down"
+
+        - alert: MongoDBReplicationLag
+          expr: mongodb_rs_member_optime_date{state="SECONDARY"} - on() mongodb_rs_member_optime_date{state="PRIMARY"} > 10
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "MongoDB replication lag > 10s"
+            description: "Lag is {{ $value }}s."
+
+        - alert: MongoDBConnectionsHigh
+          expr: mongodb_connections{state="current"} / mongodb_connections{state="available"} > 0.8
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "MongoDB connection pool > 80%"
+
+    # ── Redis ────────────────────────────────────────────────────────────────
+    - name: infrawatch.redis
+      interval: 30s
+      rules:
+        - alert: RedisDown
+          expr: redis_up == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Redis is down"
+
+        - alert: RedisMemoryHigh
+          expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Redis memory usage > 90%"
+
+        - alert: RedisReplicationBroken
+          expr: delta(redis_connected_slaves[1m]) < 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Redis lost a replica"
+
+    # ── RabbitMQ ─────────────────────────────────────────────────────────────
+    - name: infrawatch.rabbitmq
+      interval: 30s
+      rules:
+        - alert: RabbitMQNodeDown
+          expr: rabbitmq_build_info == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "RabbitMQ node is down"
+
+        - alert: RabbitMQHighQueueDepth
+          expr: rabbitmq_queue_messages_ready > 10000
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "RabbitMQ queue depth > 10000"
+            description: "Queue {{ $labels.queue }} has {{ $value }} messages."
+
+        - alert: RabbitMQConsumerMissing
+          expr: rabbitmq_queue_messages > 100 and rabbitmq_queue_consumers == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "RabbitMQ queue {{ $labels.queue }} has no consumers"
+
+    # ── Nodes ────────────────────────────────────────────────────────────────
+    - name: infrawatch.nodes
+      interval: 60s
+      rules:
+        - alert: NodeHighCPU
+          expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Node {{ $labels.instance }} CPU > 85%"
+
+        - alert: NodeHighMemory
+          expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.9
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Node {{ $labels.instance }} memory > 90%"
+
+        - alert: NodeDiskSpaceLow
+          expr: node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} < 0.1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Node {{ $labels.instance }} disk < 10% free"

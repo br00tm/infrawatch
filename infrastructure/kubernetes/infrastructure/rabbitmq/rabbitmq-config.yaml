@@ -1,0 +1,53 @@
+---
+# Policy: HA queues replicated across all nodes
+apiVersion: rabbitmq.com/v1beta1
+kind: Policy
+metadata:
+  name: ha-all
+  namespace: infrawatch-data
+spec:
+  name: ha-all
+  pattern: ".*"
+  applyTo: "all"
+  definition:
+    ha-mode: all
+    ha-sync-mode: automatic
+    message-ttl: 86400000    # 24h TTL on messages
+  rabbitmqClusterReference:
+    name: infrawatch-rabbitmq
+---
+# Policy: DLX (Dead Letter Exchange) for failed messages
+apiVersion: rabbitmq.com/v1beta1
+kind: Policy
+metadata:
+  name: dlx-policy
+  namespace: infrawatch-data
+spec:
+  name: dlx-policy
+  pattern: "^infrawatch\\."
+  applyTo: "queues"
+  definition:
+    dead-letter-exchange: infrawatch.dlx
+    dead-letter-routing-key: dead
+  rabbitmqClusterReference:
+    name: infrawatch-rabbitmq
+---
+# ServiceMonitor for RabbitMQ Prometheus metrics
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: rabbitmq
+  namespace: infrawatch-monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames:
+      - infrawatch-data
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: infrawatch-rabbitmq
+  endpoints:
+    - port: prometheus
+      interval: 15s
+      path: /metrics

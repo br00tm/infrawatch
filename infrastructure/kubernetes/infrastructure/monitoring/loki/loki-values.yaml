@@ -1,0 +1,56 @@
+# Loki Helm values
+# helm install loki grafana/loki -n infrawatch-monitoring -f loki-values.yaml
+
+loki:
+  auth_enabled: false
+
+  commonConfig:
+    replication_factor: 1
+
+  storage:
+    type: filesystem
+
+  limits_config:
+    retention_period: 30d
+    enforce_metric_name: false
+    reject_old_samples: true
+    reject_old_samples_max_age: 168h
+    ingestion_rate_mb: 16
+    ingestion_burst_size_mb: 32
+
+  schema_config:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+
+  server:
+    http_listen_port: 3100
+    grpc_listen_port: 9095
+    log_level: info
+
+  compactor:
+    working_directory: /data/compactor
+    retention_enabled: true
+
+singleBinary:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  persistence:
+    enabled: true
+    size: 20Gi
+
+# Grafana Agent (log shipper — replaces Promtail)
+# Using Promtail for compatibility
+test:
+  enabled: false

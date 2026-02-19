@@ -3,59 +3,13 @@
 @tailwind utilities;
 
 @layer base {
-  html {
-    @apply antialiased;
-  }
-
   body {
-    @apply bg-gray-50 text-gray-900 dark:bg-dark-bg dark:text-gray-100;
+    @apply text-gray-900 dark:text-gray-100;
   }
 }
 
-@layer components {
-  .btn {
-    @apply px-4 py-2 rounded-lg font-medium transition-colors duration-200;
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
   }
-
-  .btn-primary {
-    @apply bg-primary-600 text-white hover:bg-primary-700;
-  }
-
-  .btn-secondary {
-    @apply bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-dark-card dark:text-gray-200 dark:hover:bg-dark-border;
-  }
-
-  .btn-danger {
-    @apply bg-red-600 text-white hover:bg-red-700;
-  }
-
-  .card {
-    @apply bg-white dark:bg-dark-card rounded-xl shadow-sm border border-gray-200 dark:border-dark-border;
-  }
-
-  .input {
-    @apply w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-dark-border bg-white dark:bg-dark-card focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all;
-  }
-
-  .label {
-    @apply block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1;
-  }
-}
-
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  @apply bg-gray-100 dark:bg-dark-bg;
-}
-
-::-webkit-scrollbar-thumb {
-  @apply bg-gray-300 dark:bg-dark-border rounded-full;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  @apply bg-gray-400 dark:bg-gray-600;
 }

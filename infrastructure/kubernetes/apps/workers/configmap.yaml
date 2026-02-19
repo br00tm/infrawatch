@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: workers-config
+  namespace: infrawatch
+data:
+  MONGODB_DB_NAME: "infrawatch"
+  LOG_LEVEL: "INFO"

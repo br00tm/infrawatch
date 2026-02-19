@@ -5,10 +5,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from fastapi import WebSocket
+
 from app.api.v1.router import api_router
+from app.api.websocket import websocket_endpoint
 from app.config import get_settings
 from app.core.logging import setup_logging
-from app.db.mongodb import close_mongodb, connect_mongodb
+from app.db.init_db import init_database
+from app.db.mongodb import close_mongodb, connect_mongodb, get_database
 
 settings = get_settings()
 
@@ -19,6 +23,8 @@ async def lifespan(app: FastAPI):
     # Startup
     setup_logging()
     await connect_mongodb()
+    db = await get_database()
+    await init_database(db)
     yield
     # Shutdown
     await close_mongodb()
@@ -45,6 +51,12 @@ app.add_middleware(
 
 # Include API router
 app.include_router(api_router, prefix=settings.api_v1_prefix)
+
+
+@app.websocket("/ws")
+async def websocket_route(websocket: WebSocket):
+    """WebSocket endpoint for real-time updates."""
+    await websocket_endpoint(websocket)
 
 
 @app.get("/", tags=["Root"])

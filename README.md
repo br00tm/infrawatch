@@ -48,7 +48,7 @@ docker-compose up -d
 
 ### Default Credentials
 
-- **Admin User**: admin@infrawatch.local / admin123
+- **Admin User**: admin@infrawatch.dev / admin123
 - **RabbitMQ**: infrawatch / infrawatch123
 
 ## Architecture

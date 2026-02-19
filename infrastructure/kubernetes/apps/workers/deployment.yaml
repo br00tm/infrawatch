@@ -1,0 +1,161 @@
+---
+# Celery Worker
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: infrawatch
+  labels:
+    app: worker
+    app.kubernetes.io/name: infrawatch-worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: worker
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  template:
+    metadata:
+      labels:
+        app: worker
+        app.kubernetes.io/name: infrawatch-worker
+    spec:
+      priorityClassName: infrawatch-normal
+      serviceAccountName: infrawatch-worker
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: worker
+          image: infrawatch/workers:latest
+          imagePullPolicy: Always
+          command: ["celery", "-A", "celery_app", "worker", "--loglevel=info", "--concurrency=4"]
+          envFrom:
+            - configMapRef:
+                name: workers-config
+            - secretRef:
+                name: workers-secrets
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          livenessProbe:
+            exec:
+              command:
+                - celery
+                - -A
+                - celery_app
+                - inspect
+                - ping
+                - -d
+                - celery@$HOSTNAME
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 15
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+# Celery Beat (single replica — scheduler must not run in parallel)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: beat
+  namespace: infrawatch
+  labels:
+    app: beat
+    app.kubernetes.io/name: infrawatch-beat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: beat
+  strategy:
+    type: Recreate   # Never run 2 beat instances simultaneously
+  template:
+    metadata:
+      labels:
+        app: beat
+        app.kubernetes.io/name: infrawatch-beat
+    spec:
+      priorityClassName: infrawatch-normal
+      serviceAccountName: infrawatch-worker
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: beat
+          image: infrawatch/workers:latest
+          imagePullPolicy: Always
+          command: ["celery", "-A", "celery_app", "beat", "--loglevel=info"]
+          envFrom:
+            - configMapRef:
+                name: workers-config
+            - secretRef:
+                name: workers-secrets
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: beat-schedule
+              mountPath: /app/celerybeat-schedule
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: beat-schedule
+          emptyDir: {}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: worker-hpa
+  namespace: infrawatch
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: worker
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 75
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: infrawatch-worker
+  namespace: infrawatch

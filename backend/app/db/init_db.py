@@ -24,7 +24,7 @@ async def init_database(db: AsyncIOMotorDatabase) -> None:
 
 async def create_default_admin(db: AsyncIOMotorDatabase) -> None:
     """Create default admin user if not exists."""
-    admin_email = "admin@infrawatch.local"
+    admin_email = "admin@infrawatch.dev"
 
     existing_admin = await db.users.find_one({"email": admin_email})
     if existing_admin:

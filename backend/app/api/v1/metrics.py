@@ -5,6 +5,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from app.api.websocket import manager as ws_manager
 from app.dependencies import get_db
 from app.models.metric import MetricType
 from app.schemas.common import MessageResponse, PaginatedResponse
@@ -31,7 +32,9 @@ async def create_metric(
 ):
     """Create a new metric."""
     metric = await service.create_metric(data)
-    return MetricResponse.model_validate(metric.model_dump(by_alias=True))
+    response = MetricResponse.model_validate(metric.model_dump(by_alias=True))
+    await ws_manager.broadcast("metric", response.model_dump(mode="json"))
+    return response
 
 
 @router.post("/batch", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)

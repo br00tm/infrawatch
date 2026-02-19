@@ -1,0 +1,74 @@
+---
+# MongoDB Community Operator — ReplicaSet (3 members)
+# Requires: kubectl apply -f https://raw.githubusercontent.com/mongodb/mongodb-kubernetes-operator/master/config/crd/bases/mongodbcommunity.mongodb.com_mongodbcommunity.yaml
+apiVersion: mongodbcommunity.mongodb.com/v1
+kind: MongoDBCommunity
+metadata:
+  name: infrawatch-mongodb
+  namespace: infrawatch-data
+spec:
+  members: 3
+  type: ReplicaSet
+  version: "7.0.4"
+
+  security:
+    authentication:
+      modes: ["SCRAM"]
+
+  users:
+    - name: infrawatch
+      db: admin
+      passwordSecretRef:
+        name: mongodb-infrawatch-password
+      roles:
+        - name: readWrite
+          db: infrawatch
+        - name: dbAdmin
+          db: infrawatch
+      scramCredentialsSecretName: infrawatch-scram
+
+  additionalMongodConfig:
+    storage.wiredTiger.engineConfig.journalCompressor: zlib
+    operationProfiling.mode: slowOp
+    operationProfiling.slowOpThresholdMs: 100
+
+  statefulSet:
+    spec:
+      selector: {}
+      template:
+        spec:
+          containers:
+            - name: mongod
+              resources:
+                requests:
+                  cpu: 500m
+                  memory: 1Gi
+                limits:
+                  cpu: "2"
+                  memory: 4Gi
+          affinity:
+            podAntiAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  podAffinityTerm:
+                    labelSelector:
+                      matchLabels:
+                        app: infrawatch-mongodb-svc
+                    topologyKey: kubernetes.io/hostname
+      volumeClaimTemplates:
+        - metadata:
+            name: data-volume
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 20Gi
+            storageClassName: standard
+        - metadata:
+            name: logs-volume
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 2Gi
+            storageClassName: standard

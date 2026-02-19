@@ -1,0 +1,62 @@
+---
+# RabbitMQ Cluster Operator — HA cluster (3 nodes)
+# Requires: kubectl apply -f https://github.com/rabbitmq/cluster-operator/releases/latest/download/cluster-operator.yml
+apiVersion: rabbitmq.com/v1beta1
+kind: RabbitmqCluster
+metadata:
+  name: infrawatch-rabbitmq
+  namespace: infrawatch-data
+spec:
+  replicas: 3
+  image: rabbitmq:3.12-management
+
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+
+  rabbitmq:
+    additionalConfig: |
+      cluster_partition_handling = pause_minority
+      vm_memory_high_watermark_paging_ratio = 0.99
+      disk_free_limit.relative = 1.0
+      collect_statistics_interval = 10000
+    additionalPlugins:
+      - rabbitmq_management
+      - rabbitmq_prometheus
+      - rabbitmq_shovel
+      - rabbitmq_shovel_management
+
+  persistence:
+    storageClassName: standard
+    storage: "10Gi"
+
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: infrawatch-rabbitmq
+          topologyKey: kubernetes.io/hostname
+
+  override:
+    statefulSet:
+      spec:
+        template:
+          spec:
+            containers:
+              - name: rabbitmq
+                env:
+                  - name: RABBITMQ_DEFAULT_USER
+                    valueFrom:
+                      secretKeyRef:
+                        name: rabbitmq-credentials
+                        key: username
+                  - name: RABBITMQ_DEFAULT_PASS
+                    valueFrom:
+                      secretKeyRef:
+                        name: rabbitmq-credentials
+                        key: password

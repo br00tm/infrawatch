@@ -61,7 +61,7 @@ export default function Login() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@infrawatch.local"
+              placeholder="admin@infrawatch.dev"
               required
             />
 
@@ -82,7 +82,7 @@ export default function Login() {
           {/* Demo credentials */}
           <div className="mt-6 p-4 bg-gray-50 dark:bg-dark-bg rounded-lg">
             <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-              Demo credentials: admin@infrawatch.local / admin123
+              Demo credentials: admin@infrawatch.dev / admin123
             </p>
           </div>
         </div>

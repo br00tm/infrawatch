@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: infrawatch
+data:
+  APP_ENV: "production"
+  DEBUG: "false"
+  MONGODB_DB_NAME: "infrawatch"
+  CORS_ORIGINS: '["https://infrawatch.example.com"]'
+  LOG_LEVEL: "INFO"

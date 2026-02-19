@@ -1,0 +1,71 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mongodb-backup
+  namespace: infrawatch-data
+spec:
+  schedule: "0 2 * * *"    # Every day at 02:00 UTC
+  successfulJobsHistoryLimit: 7
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: mongo:7.0
+              env:
+                - name: MONGODB_URI
+                  valueFrom:
+                    secretKeyRef:
+                      name: mongodb-backup-secret
+                      key: uri
+                - name: BACKUP_BUCKET
+                  valueFrom:
+                    secretKeyRef:
+                      name: mongodb-backup-secret
+                      key: bucket
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  set -e
+                  DATE=$(date +%Y%m%d_%H%M%S)
+                  BACKUP_DIR="/tmp/backup_${DATE}"
+                  echo "Starting backup: ${DATE}"
+                  mongodump --uri="${MONGODB_URI}" --out="${BACKUP_DIR}"
+                  # If running in cloud, upload to S3/GCS:
+                  # aws s3 cp --recursive "${BACKUP_DIR}" "s3://${BACKUP_BUCKET}/mongodb/${DATE}/"
+                  # For local testing, keep in /backup volume
+                  cp -r "${BACKUP_DIR}" /backup/
+                  echo "Backup completed: ${BACKUP_DIR}"
+                  # Clean backups older than 7 days
+                  find /backup -maxdepth 1 -type d -mtime +7 -exec rm -rf {} + || true
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: 500m
+                  memory: 1Gi
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backup
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: mongodb-backup-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongodb-backup-pvc
+  namespace: infrawatch-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard

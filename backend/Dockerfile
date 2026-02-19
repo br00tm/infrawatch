@@ -3,6 +3,9 @@ FROM python:3.11-slim as builder
 
 WORKDIR /app
 
+# Suppress debconf warnings
+ENV DEBIAN_FRONTEND=noninteractive
+
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -16,6 +19,9 @@ RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.t
 FROM python:3.11-slim
 
 WORKDIR /app
+
+# Suppress debconf warnings
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Create non-root user
 RUN groupadd -r infrawatch && useradd -r -g infrawatch infrawatch

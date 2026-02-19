@@ -1,0 +1,61 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: infrawatch-alerts
+  namespace: infrawatch-monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  route:
+    groupBy: ["alertname", "severity", "namespace"]
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 4h
+    receiver: "default"
+    routes:
+      - matchers:
+          - name: severity
+            value: critical
+        receiver: "critical-alerts"
+        repeatInterval: 1h
+      - matchers:
+          - name: severity
+            value: warning
+        receiver: "warning-alerts"
+        repeatInterval: 4h
+      - matchers:
+          - name: alertname
+            value: Watchdog
+        receiver: "null"
+
+  receivers:
+    - name: "null"
+
+    - name: "default"
+      webhookConfigs:
+        - url: "http://backend.infrawatch.svc.cluster.local:8000/api/v1/alerts/webhook"
+          sendResolved: true
+
+    - name: "critical-alerts"
+      webhookConfigs:
+        - url: "http://backend.infrawatch.svc.cluster.local:8000/api/v1/alerts/webhook"
+          sendResolved: true
+      # Add Telegram/Discord here:
+      # telegramConfigs:
+      #   - botToken: "<token>"
+      #     chatID: <chat_id>
+      #     message: "🚨 CRITICAL: {{ .CommonAnnotations.summary }}"
+
+    - name: "warning-alerts"
+      webhookConfigs:
+        - url: "http://backend.infrawatch.svc.cluster.local:8000/api/v1/alerts/webhook"
+          sendResolved: true
+
+  inhibitRules:
+    - sourceMatchers:
+        - name: severity
+          value: critical
+      targetMatchers:
+        - name: severity
+          value: warning
+      equal: ["alertname", "namespace", "service"]
