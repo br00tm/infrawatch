@@ -35,6 +35,15 @@ kubectl wait --namespace rabbitmq-system \
 ok "RabbitMQ Operator installed"
 
 # ── kube-prometheus-stack ─────────────────────────────────────────────────────
+# Create Grafana dashboard ConfigMap BEFORE installing the chart (Grafana init container needs it)
+log "Creating Grafana dashboard ConfigMap..."
+kubectl create namespace "${NAMESPACE_MONITORING}" --dry-run=client -o yaml | kubectl apply -f -
+kubectl create configmap infrawatch-grafana-dashboards \
+  --namespace "${NAMESPACE_MONITORING}" \
+  --from-file=cluster-overview.json=infrastructure/kubernetes/infrastructure/monitoring/grafana/dashboards/cluster-overview.json \
+  --dry-run=client -o yaml | kubectl apply -f -
+ok "Grafana dashboards ConfigMap ready"
+
 log "Installing kube-prometheus-stack..."
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
