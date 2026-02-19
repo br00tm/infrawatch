@@ -11,7 +11,7 @@ resources:
 
 namespace: infrawatch
 
-# Development-specific image tags
+# Development-specific image tags (pointing to local registry)
 images:
   - name: infrawatch/backend
     newName: localhost:5000/infrawatch/backend
@@ -25,7 +25,7 @@ images:
 
 # All patches in a single block
 patches:
-  # Scale down replicas for dev
+  # Scale down to 1 replica for dev
   - patch: |-
       apiVersion: apps/v1
       kind: Deployment
@@ -50,6 +50,18 @@ patches:
         namespace: infrawatch
       spec:
         replicas: 1
+
+  # Reduce HPA minReplicas to 1 in dev so it doesn't override the replica count above
+  - patch: |-
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: backend-hpa
+        namespace: infrawatch
+      spec:
+        minReplicas: 1
+        maxReplicas: 2
+
   # Development env overrides
   - patch: |-
       apiVersion: v1

@@ -11,12 +11,10 @@ metadata:
     {{- with .Values.frontend.ingress.annotations }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
-    # WebSocket support
+    # WebSocket support (nginx ingress handles Upgrade/Connection automatically)
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      proxy_set_header Upgrade $http_upgrade;
-      proxy_set_header Connection "upgrade";
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
 spec:
   {{- if .Values.frontend.ingress.className }}
   ingressClassName: {{ .Values.frontend.ingress.className }}
