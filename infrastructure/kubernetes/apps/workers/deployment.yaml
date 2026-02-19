@@ -104,7 +104,7 @@ spec:
         - name: beat
           image: infrawatch/workers:latest
           imagePullPolicy: Always
-          command: ["celery", "-A", "celery_app", "beat", "--loglevel=info"]
+          command: ["celery", "-A", "celery_app", "beat", "--loglevel=info", "--schedule=/app/beat-data/celerybeat-schedule"]
           envFrom:
             - configMapRef:
                 name: workers-config
@@ -127,7 +127,7 @@ spec:
             - name: tmp
               mountPath: /tmp
             - name: beat-schedule
-              mountPath: /app/celerybeat-schedule
+              mountPath: /app/beat-data
       volumes:
         - name: tmp
           emptyDir: {}
